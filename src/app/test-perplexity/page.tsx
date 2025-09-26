@@ -49,7 +49,7 @@ export default function TestPerplexityPage() {
           break;
         case 'analysis':
           data = {
-            type: 'text',
+            type: 'txt',
             name: 'test.txt',
             content: testData.description
           };

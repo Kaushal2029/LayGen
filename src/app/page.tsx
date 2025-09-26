@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Upload, FileText, Image, Code, Sparkles, Download, FileSpreadsheet, RefreshCw } from "lucide-react";
 import DesignSelector from "@/components/DesignSelector";
 import { parseExcelFile, generatePromptFromExcelData } from "@/utils/excel-parser";
+import { DesignOption, ColorCombination, ExcelData } from "@/types";
 
 export default function Home() {
   const [, setIsProcessing] = useState(false);
@@ -24,7 +25,7 @@ export default function Home() {
   const [selectedColors, setSelectedColors] = useState<Record<string, string>>({});
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isAIGenerated, setIsAIGenerated] = useState(false);
-  const [excelData, setExcelData] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [excelData, setExcelData] = useState<ExcelData | null>(null);
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
 
   const [dataAnalysis, setDataAnalysis] = useState<{
@@ -194,7 +195,7 @@ export default function Home() {
     }
   };
 
-  const handleDesignSelect = (design: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const handleDesignSelect = (design: DesignOption) => {
     console.log('🎯 [MAIN PAGE] Design selected:', design);
     console.log('🎯 [MAIN PAGE] Design name:', design?.name);
     console.log('🎯 [MAIN PAGE] Design colors:', design?.layout?.colors);
@@ -240,7 +241,7 @@ export default function Home() {
   };
 
 
-  const handleDesignsGenerated = (designs: any[], colors: any[]) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const handleDesignsGenerated = (designs: DesignOption[], colors: ColorCombination[]) => {
     console.log('Designs generated in parent:', designs, colors);
     setDesignOptions(designs);
     setColorCombinations(colors);
@@ -317,7 +318,7 @@ export default function Home() {
           layoutData: { 
             dataAnalysis: finalDataAnalysis,
             selectedColors,
-            projectName: finalDataAnalysis.projectName
+            projectName: finalDataAnalysis?.projectName || 'Generated Project'
           },
           framework: 'html'
         }),
@@ -425,8 +426,18 @@ export default function Home() {
                 }`}>
                   {step.id === 1 && <Upload className="w-5 h-5" />}
                   {step.id === 2 && <Sparkles className="w-5 h-5" />}
-                  {step.id === 3 && <Image className="w-5 h-5" aria-hidden="true" />}
-                  {step.id === 4 && <Image className="w-5 h-5" aria-hidden="true" />}
+                  {step.id === 3 && (
+                    <>
+                      {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                      <Image className="w-5 h-5" aria-hidden="true" />
+                    </>
+                  )}
+                  {step.id === 4 && (
+                    <>
+                      {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                      <Image className="w-5 h-5" aria-hidden="true" />
+                    </>
+                  )}
                   {step.id === 5 && <Code className="w-5 h-5" />}
                   {step.id === 6 && <Download className="w-5 h-5" />}
                 </div>

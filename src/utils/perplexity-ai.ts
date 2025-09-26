@@ -261,7 +261,7 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
         console.log('✅ [PERPLEXITY] Direct JSON parse successful');
       } catch (parseError) {
         console.log('⚠️ [PERPLEXITY] Direct JSON parse failed, attempting to extract JSON...');
-        console.log('⚠️ [PERPLEXITY] Parse error:', parseError.message);
+        console.log('⚠️ [PERPLEXITY] Parse error:', parseError instanceof Error ? parseError.message : String(parseError));
         
         // Try to extract JSON from markdown code blocks
         const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -270,7 +270,7 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
             analysis = JSON.parse(jsonMatch[1]);
             console.log('✅ [PERPLEXITY] Successfully extracted JSON from code block');
           } catch (extractError) {
-            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError.message);
+            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError instanceof Error ? extractError.message : String(extractError));
           }
         }
         
@@ -284,12 +284,12 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
               analysis = JSON.parse(jsonString);
               console.log('✅ [PERPLEXITY] Successfully extracted JSON from boundaries');
             } catch (boundaryError) {
-              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError.message);
+              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError instanceof Error ? boundaryError.message : String(boundaryError));
               
               // Try to fix common JSON issues
               try {
                 console.log('🔧 [PERPLEXITY] Attempting to fix JSON issues...');
-                let fixedJson = jsonString
+                const fixedJson = content
                   .replace(/\\"/g, '"')  // Fix escaped quotes
                   .replace(/"\s*:\s*"/g, '": "')  // Fix spacing around colons
                   .replace(/,\s*}/g, '}')  // Remove trailing commas
@@ -301,7 +301,7 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
                 analysis = JSON.parse(fixedJson);
                 console.log('✅ [PERPLEXITY] JSON fixing successful');
               } catch (fixError) {
-                console.log('❌ [PERPLEXITY] JSON fixing failed:', fixError.message);
+                console.log('❌ [PERPLEXITY] JSON fixing failed:', fixError instanceof Error ? fixError.message : String(fixError));
               }
             }
           }
@@ -352,7 +352,7 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
             targetAudience: analysis.targetAudience || 'General users',
             designSuggestions: analysis.designSuggestions || 'Modern, clean design',
             description: analysis.description || 'A web application based on the provided document'
-          } as LayoutData,
+          } as unknown as LayoutData,
           confidence: 0.9,
           suggestions: [
             'Consider responsive design for mobile devices',
@@ -378,10 +378,10 @@ IMPORTANT: Return ONLY valid JSON. Do not include any markdown formatting, code 
       
       const prompt = `Generate layout variations for a web application based on this data:
 
-Application Type: ${(layoutData as any).suggestedAppType || 'Web Application'}
-Description: ${(layoutData as any).description || 'A modern web application'}
-Features: ${JSON.stringify((layoutData as any).recommendedFeatures || [])}
-Target Audience: ${(layoutData as any).targetAudience || 'General users'}
+Application Type: ${(layoutData as { suggestedAppType?: string }).suggestedAppType || 'Web Application'}
+Description: ${(layoutData as { description?: string }).description || 'A modern web application'}
+Features: ${JSON.stringify((layoutData as { recommendedFeatures?: unknown[] }).recommendedFeatures || [])}
+Target Audience: ${(layoutData as { targetAudience?: string }).targetAudience || 'General users'}
 
 Create 3 different layout variations with:
 1. Different component arrangements
@@ -446,7 +446,7 @@ Return JSON with this structure:
         console.log('✅ [PERPLEXITY] Direct JSON parse successful');
       } catch (parseError) {
         console.log('⚠️ [PERPLEXITY] Direct JSON parse failed, attempting to extract JSON...');
-        console.log('⚠️ [PERPLEXITY] Parse error:', parseError.message);
+        console.log('⚠️ [PERPLEXITY] Parse error:', parseError instanceof Error ? parseError.message : String(parseError));
         
         // Try to extract JSON from markdown code blocks
         const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -455,7 +455,7 @@ Return JSON with this structure:
             variations = JSON.parse(jsonMatch[1]);
             console.log('✅ [PERPLEXITY] Successfully extracted JSON from code block');
           } catch (extractError) {
-            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError.message);
+            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError instanceof Error ? extractError.message : String(extractError));
           }
         }
         
@@ -469,7 +469,7 @@ Return JSON with this structure:
               variations = JSON.parse(jsonString);
               console.log('✅ [PERPLEXITY] Successfully extracted JSON from boundaries');
             } catch (boundaryError) {
-              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError.message);
+              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError instanceof Error ? boundaryError.message : String(boundaryError));
             }
           }
         }
@@ -504,7 +504,7 @@ Return JSON with this structure:
       
       return {
         success: true,
-        layoutData: variations as LayoutData,
+        layoutData: variations as unknown as LayoutData,
         confidence: 0.9,
         suggestions: [
           'Consider user flow optimization',
@@ -529,14 +529,14 @@ Return JSON with this structure:
       console.log('💻 [PERPLEXITY] Starting Perplexity AI Code Generation');
       console.log('💻 [PERPLEXITY] ===========================================');
       
-      const selectedColors = (layoutData as any).selectedColors || {};
-      const description = (layoutData as any).dataAnalysis?.description || 'A modern web application';
+      const selectedColors = (layoutData as { selectedColors?: Record<string, string> }).selectedColors || {};
+      const description = (layoutData as { dataAnalysis?: { description?: string } }).dataAnalysis?.description || 'A modern web application';
       
       console.log('📋 [PERPLEXITY] Project Details:');
       console.log('   - Description:', description);
       console.log('   - Framework:', framework);
       console.log('   - Colors:', selectedColors);
-      console.log('   - App Type:', (layoutData as any).dataAnalysis?.suggestedAppType || 'Web Application');
+      console.log('   - App Type:', (layoutData as { dataAnalysis?: { suggestedAppType?: string } }).dataAnalysis?.suggestedAppType || 'Web Application');
       
       const prompt = `Create a complete web application based on this description: "${description}"
 
@@ -646,7 +646,7 @@ Return ONLY valid JSON with this EXACT structure:
         console.log('   - README Length:', codeData.readme?.length || 0);
       } catch (parseError) {
         console.log('⚠️ [PERPLEXITY] Direct JSON parse failed, attempting to extract JSON...');
-        console.log('⚠️ [PERPLEXITY] Parse error:', parseError.message);
+        console.log('⚠️ [PERPLEXITY] Parse error:', parseError instanceof Error ? parseError.message : String(parseError));
         
         // Try to extract JSON from markdown code blocks
         const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
@@ -655,7 +655,7 @@ Return ONLY valid JSON with this EXACT structure:
             codeData = JSON.parse(jsonMatch[1]);
             console.log('✅ [PERPLEXITY] Successfully extracted JSON from code block');
           } catch (extractError) {
-            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError.message);
+            console.log('❌ [PERPLEXITY] JSON extraction from code block failed:', extractError instanceof Error ? extractError.message : String(extractError));
           }
         }
         
@@ -669,7 +669,7 @@ Return ONLY valid JSON with this EXACT structure:
               codeData = JSON.parse(jsonString);
               console.log('✅ [PERPLEXITY] Successfully extracted JSON from boundaries');
             } catch (boundaryError) {
-              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError.message);
+              console.log('❌ [PERPLEXITY] JSON extraction from boundaries failed:', boundaryError instanceof Error ? boundaryError.message : String(boundaryError));
             }
           }
         }
@@ -698,7 +698,7 @@ Return ONLY valid JSON with this EXACT structure:
               console.log('✅ [PERPLEXITY] Successfully fixed and parsed JSON');
             }
           } catch (fixError) {
-            console.log('❌ [PERPLEXITY] JSON fixing failed:', fixError.message);
+            console.log('❌ [PERPLEXITY] JSON fixing failed:', fixError instanceof Error ? fixError.message : String(fixError));
           }
         }
         
@@ -938,7 +938,7 @@ This is a fallback response generated when the AI response could not be parsed a
       
       // Log more detailed error information
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
+        const axiosError = error as { response?: { status?: number; data?: unknown }; config?: { url?: string; method?: string; headers?: Record<string, string> } };
         console.error('❌ [PERPLEXITY] Response status:', axiosError.response?.status);
         console.error('❌ [PERPLEXITY] Response data:', axiosError.response?.data);
         console.error('❌ [PERPLEXITY] Request config:', {
@@ -1001,7 +1001,7 @@ Return only the enhanced prompt, no additional text.`;
         layoutData: {
           imagePrompt: enhancedImagePrompt,
           originalPrompt: prompt
-        } as LayoutData,
+        } as unknown as LayoutData,
         confidence: 0.8,
         suggestions: [
           'Use the enhanced prompt with an image generation service',
@@ -1014,7 +1014,7 @@ Return only the enhanced prompt, no additional text.`;
       
       // Log more detailed error information
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
+        const axiosError = error as { response?: { status?: number; data?: unknown }; config?: { headers?: Record<string, string> } };
         console.error('❌ [PERPLEXITY] Response status:', axiosError.response?.status);
         console.error('❌ [PERPLEXITY] Response data:', axiosError.response?.data);
         console.error('❌ [PERPLEXITY] Request headers:', axiosError.config?.headers);

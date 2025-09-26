@@ -42,7 +42,7 @@ export function useDesignSelector() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateDesigns = useCallback(async (prompt?: string, analysis?: DataAnalysis, colors?: Record<string, string>, excelData?: any) => {
+  const generateDesigns = useCallback(async (prompt?: string, analysis?: DataAnalysis, colors?: Record<string, string>, excelData?: Record<string, unknown>) => {
     setIsLoading(true);
     setError(null);
 

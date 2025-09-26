@@ -120,7 +120,7 @@ export async function GET() {
       analysis: {
         testType: 'analysis',
         data: {
-          type: 'text',
+          type: 'txt',
           name: 'test.txt',
           content: 'Sample document content for analysis'
         }

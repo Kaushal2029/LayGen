@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { Sparkles, Loader2, Image as ImageIcon, Download } from 'lucide-react';
+import { Sparkles, Loader2, Download } from 'lucide-react';
+import NextImage from 'next/image';
 
 export default function TestReplicatePage() {
   const [prompt, setPrompt] = useState('A modern web dashboard with clean design, blue and white colors, cards and charts');
@@ -130,13 +131,14 @@ export default function TestReplicatePage() {
             
             <div className="space-y-4">
               <div className="relative">
-                <img
+                <NextImage
                   src={result.image}
                   alt="Generated image"
+                  width={800}
+                  height={600}
                   className="w-full max-w-2xl mx-auto rounded-lg shadow-md"
-                  onError={(e) => {
+                  onError={() => {
                     console.error('❌ [TEST PAGE] Image failed to load');
-                    e.currentTarget.style.display = 'none';
                   }}
                 />
               </div>

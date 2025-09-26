@@ -1,5 +1,5 @@
 import Replicate from 'replicate';
-import { AIProcessingResult } from '@/types';
+import { AIProcessingResult, LayoutData } from '@/types';
 
 export class ReplicateAIService {
   private replicate: Replicate;
@@ -38,7 +38,7 @@ export class ReplicateAIService {
       if (Array.isArray(output)) {
         imageUrl = output[0] as string;
       } else {
-        imageUrl = output as string;
+        imageUrl = output as unknown as string;
       }
 
       return {
@@ -47,13 +47,15 @@ export class ReplicateAIService {
           image: imageUrl,
           prompt: prompt,
           generatedAt: new Date().toISOString()
-        }
+        } as unknown as LayoutData,
+        confidence: 0.9
       };
     } catch (error) {
       console.error('❌ [REPLICATE AI] Image generation failed:', error);
       return {
         success: false,
-        error: `Replicate image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: `Replicate image generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        confidence: 0
       };
     }
   }
@@ -65,7 +67,7 @@ export class ReplicateAIService {
     
     try {
       const output = await this.replicate.run(
-        model,
+        model as `${string}/${string}`,
         {
           input: {
             prompt: prompt,
@@ -84,7 +86,7 @@ export class ReplicateAIService {
       if (Array.isArray(output)) {
         imageUrl = output[0] as string;
       } else {
-        imageUrl = output as string;
+        imageUrl = output as unknown as string;
       }
 
       return {
@@ -94,13 +96,15 @@ export class ReplicateAIService {
           prompt: prompt,
           model: model,
           generatedAt: new Date().toISOString()
-        }
+        } as unknown as LayoutData,
+        confidence: 0.9
       };
     } catch (error) {
       console.error('❌ [REPLICATE AI] Image generation failed with model:', model, error);
       return {
         success: false,
-        error: `Replicate image generation failed with model ${model}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: `Replicate image generation failed with model ${model}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        confidence: 0
       };
     }
   }

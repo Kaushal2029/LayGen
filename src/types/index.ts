@@ -223,8 +223,52 @@ export interface Change {
   type: 'added' | 'modified' | 'removed';
   nodeId: string;
   property: string;
-  oldValue?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  newValue?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  oldValue?: string | number | boolean | object;
+  newValue?: string | number | boolean | object;
+}
+
+// Design and UI related interfaces
+export interface DesignOption {
+  id: string;
+  name: string;
+  description: string;
+  preview: string;
+  components: Array<{
+    name: string;
+    type: string;
+    description: string;
+    properties: Record<string, unknown>;
+    layout: { x: number; y: number; width: number; height: number };
+  }>;
+  layout: {
+    type: string;
+    theme: string;
+    colors: Record<string, string>;
+  };
+}
+
+export interface ColorCombination {
+  name: string;
+  colors: Record<string, string>;
+  preview: string;
+}
+
+export interface DataAnalysis {
+  dataType: string;
+  columns: string[];
+  recordCount: string;
+  dataPatterns: string;
+  suggestedAppType: string;
+  description: string;
+  projectName: string;
+  titleColumn: string;
+}
+
+export interface ExcelData {
+  description: string;
+  requirements: string[];
+  features: string[];
+  rawData: unknown[][];
 }
 
 // API Response types

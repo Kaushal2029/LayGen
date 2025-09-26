@@ -39,14 +39,15 @@ export async function POST(request: NextRequest) {
     console.log('📊 [TEST REPLICATE] Result success:', result.success);
     
     if (result.success) {
-      console.log('🖼️ [TEST REPLICATE] Image URL:', result.layoutData?.image);
+      const imageData = result.layoutData as { image?: string; generatedAt?: string };
+      console.log('🖼️ [TEST REPLICATE] Image URL:', imageData?.image);
       return NextResponse.json({
         success: true,
         data: {
-          image: result.layoutData?.image,
+          image: imageData?.image,
           prompt: prompt,
           processingTime: processingTime,
-          generatedAt: result.layoutData?.generatedAt
+          generatedAt: imageData?.generatedAt
         },
         message: 'Image generated successfully!'
       });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAIService } from '@/utils/ai';
-import { ApiResponse } from '@/types';
+import { ApiResponse, LayoutData } from '@/types';
 
 export async function POST(request: NextRequest) {
   console.log('🎨 [DESIGN API] Starting design generation process...');
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       documentToProcess = {
         id: 'analysis-design-doc',
         name: 'analysis-data.txt',
-        type: 'text' as const,
+        type: 'txt' as const,
         size: designPrompt.length,
         content: JSON.stringify({
           type: 'analysis_data',
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       documentToProcess = {
         id: 'prompt-design-doc',
         name: 'design-requirements.txt',
-        type: 'text' as const,
+        type: 'txt' as const,
         size: designPrompt.length,
         content: JSON.stringify({
           type: 'prompt_data',
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
         designSuggestions: 'Clean, modern design with intuitive navigation'
       };
       
-      result = await aiService.generateLayoutVariations(layoutData);
+      result = await aiService.generateLayoutVariations(layoutData as unknown as LayoutData);
     }
 
     if (!result.success) {

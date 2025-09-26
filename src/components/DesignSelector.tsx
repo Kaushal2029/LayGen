@@ -3,18 +3,20 @@
 import { useState } from 'react';
 import { useDesignSelector } from '@/hooks/useDesignSelector';
 import { Sparkles, Palette, Layout, RefreshCw, Image } from 'lucide-react';
+import NextImage from 'next/image';
+import { DesignOption, ColorCombination, DataAnalysis, ExcelData } from '@/types';
 
 interface DesignSelectorProps {
-  onDesignSelect?: (design: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onDesignSelect?: (design: DesignOption) => void;
   onColorSelect?: (colors: Record<string, string>) => void;
-  onDesignsGenerated?: (designs: any[], colors: any[]) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
-  initialDataAnalysis?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  onDesignsGenerated?: (designs: DesignOption[], colors: ColorCombination[]) => void;
+  initialDataAnalysis?: DataAnalysis | null;
   initialColors?: Record<string, string>;
-  designOptions?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-  colorCombinations?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  designOptions?: DesignOption[];
+  colorCombinations?: ColorCombination[];
   isLoading?: boolean;
   error?: string | null;
-  excelData?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  excelData?: ExcelData | null;
 }
 
 export default function DesignSelector({
@@ -50,7 +52,7 @@ export default function DesignSelector({
         featuresCount: excelData.features?.length || 0
       } : 'No Excel data');
       
-      const result = await generateDesigns(description, initialDataAnalysis, initialColors, excelData);
+      const result = await generateDesigns(description, initialDataAnalysis || undefined, initialColors, excelData as unknown as Record<string, unknown> || undefined);
       // Notify parent component about the generated designs
       if (onDesignsGenerated && result?.designOptions?.length > 0) {
         onDesignsGenerated(result.designOptions, result.colorCombinations || []);
@@ -189,6 +191,7 @@ export default function DesignSelector({
       {designOptions.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
             <Image className="w-5 h-5" aria-hidden="true" />
             <span>Design Options</span>
           </h3>
@@ -204,16 +207,16 @@ export default function DesignSelector({
                 }`}
               >
                 {/* Design Image */}
-                {(design as any).image ? ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                {design.preview ? (
                   <div className="mb-4 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={(design as any).image} // eslint-disable-line @typescript-eslint/no-explicit-any
+                    <NextImage
+                      src={design.preview}
                       alt={`${design.name} preview`}
+                      width={300}
+                      height={128}
                       className="w-full h-32 object-cover"
-                      onError={(e) => {
+                      onError={() => {
                         console.warn('Failed to load design image:', design.name);
-                        e.currentTarget.style.display = 'none';
                       }}
                     />
                   </div>
@@ -236,7 +239,7 @@ export default function DesignSelector({
                   <div>Type: {design.layout?.type || 'Dashboard'}</div>
                   <div>Theme: {design.layout?.theme || 'Modern'}</div>
                   <div>Components: {design.components?.length || 0}</div>
-                  {(design as any).imagePrompt && ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  {(design as DesignOption & { imagePrompt?: string }).imagePrompt && (
                     <div className="mt-2 text-xs text-gray-400 italic">
                       AI Generated Image
                     </div>

@@ -32,7 +32,7 @@ class PerplexityHybridService {
     // First get enhanced prompt from Perplexity, then use DeepAI for image generation
     const promptResult = await this.perplexityService.generateImage(prompt);
     if (promptResult.success && promptResult.layoutData) {
-      const enhancedPrompt = (promptResult.layoutData as any).imagePrompt || prompt;
+      const enhancedPrompt = (promptResult.layoutData as { imagePrompt?: string }).imagePrompt || prompt;
       return this.deepaiService.generateImage(enhancedPrompt);
     }
     return this.deepaiService.generateImage(prompt);
@@ -172,13 +172,13 @@ class LegacyHybridAIService {
 
 // Robust AI service with automatic fallback
 class RobustAIService {
-  private primaryService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService;
-  private fallbackService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService;
+  private primaryService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService | PerplexityHybridService;
+  private fallbackService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService | PerplexityHybridService;
   private serviceName: string;
 
   constructor(
-    primaryService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService, 
-    fallbackService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService, 
+    primaryService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService | PerplexityHybridService, 
+    fallbackService: AIService | GeminiAIService | DeepAIHybridService | DeepAIPrimaryService | HybridAIService | LegacyHybridAIService | PerplexityHybridService, 
     serviceName: string
   ) {
     this.primaryService = primaryService;

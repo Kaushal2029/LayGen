@@ -11,6 +11,7 @@ interface CodeData {
   readme?: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function createCodeZip(codeData: CodeData): Promise<Buffer> {
   const zip = new JSZip();
   

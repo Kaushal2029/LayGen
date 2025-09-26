@@ -498,7 +498,7 @@ export class GeminiAIService {
     }
   }
 
-  async generateCode(layoutData: LayoutData, _framework: 'html' | 'react' = 'html'): Promise<AIProcessingResult> {
+  async generateCode(layoutData: LayoutData, framework: 'html' | 'react' = 'html'): Promise<AIProcessingResult> {
     const maxRetries = 5; // Increased retries
     const retryDelay = 3000; // Increased delay to 3 seconds
 
@@ -514,6 +514,7 @@ export class GeminiAIService {
         const prompt = `Create a complete web application based on this description: "${description}"
 
 Use these colors: ${JSON.stringify(selectedColors)}
+Framework: ${framework}
 
 Generate a FULLY FUNCTIONAL web application with:
 
