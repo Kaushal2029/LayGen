@@ -236,6 +236,13 @@ export function createAIService(): AIService | GeminiAIService | DeepAIHybridSer
   const deepaiApiKey = config.deepai.apiKey;
   const perplexityApiKey = config.perplexity.apiKey;
   
+  // Debug API keys
+  console.log('🔑 [CONFIG] Environment variables check:');
+  console.log('🔑 [CONFIG] PERPLEXITY_API_KEY:', process.env.PERPLEXITY_API_KEY ? `${process.env.PERPLEXITY_API_KEY.substring(0, 10)}...` : 'NOT SET');
+  console.log('🔑 [CONFIG] DEEPAI_API_KEY:', process.env.DEEPAI_API_KEY ? `${process.env.DEEPAI_API_KEY.substring(0, 10)}...` : 'NOT SET');
+  console.log('🔑 [CONFIG] Config perplexityApiKey:', perplexityApiKey ? `${perplexityApiKey.substring(0, 10)}...` : 'NOT SET');
+  console.log('🔑 [CONFIG] Config deepaiApiKey:', deepaiApiKey ? `${deepaiApiKey.substring(0, 10)}...` : 'NOT SET');
+  
   // Check for Perplexity AI configuration
   if (perplexityApiKey && deepaiApiKey) {
     console.log('Using Perplexity Hybrid service (Perplexity for code generation and analysis, DeepAI for images)');

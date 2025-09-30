@@ -207,7 +207,7 @@ export default function DesignSelector({
                 }`}
               >
                 {/* Design Image */}
-                {design.preview ? (
+                {design.preview && (design.preview.startsWith('http') || design.preview.startsWith('/')) ? (
                   <div className="mb-4 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                     <NextImage
                       src={design.preview}
@@ -224,7 +224,17 @@ export default function DesignSelector({
                   <div className="mb-4 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 h-32 flex items-center justify-center">
                     <div className="text-center text-gray-500 dark:text-gray-400">
                       <Layout className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <div className="text-sm">Design Preview</div>
+                      <div className="text-sm">
+                        {design.preview && !design.preview.startsWith('http') && !design.preview.startsWith('/') 
+                          ? 'Text Preview' 
+                          : 'Design Preview'
+                        }
+                      </div>
+                      {design.preview && !design.preview.startsWith('http') && !design.preview.startsWith('/') && (
+                        <div className="text-xs mt-1 px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-gray-600 dark:text-gray-300 max-w-full truncate">
+                          {design.preview}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

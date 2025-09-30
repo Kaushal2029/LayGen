@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, FileText, Image, Code, Sparkles, Download, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { Upload, FileText, Image, Code, Sparkles, Download, FileSpreadsheet, RefreshCw, Settings } from "lucide-react";
 import DesignSelector from "@/components/DesignSelector";
+import CodeGenerationSelector from "@/components/CodeGenerationSelector";
 import { parseExcelFile, generatePromptFromExcelData } from "@/utils/excel-parser";
-import { DesignOption, ColorCombination, ExcelData } from "@/types";
+import { DesignOption, ColorCombination, ExcelData, CodeGenerationOptions } from "@/types";
 
 export default function Home() {
   const [, setIsProcessing] = useState(false);
@@ -14,6 +15,10 @@ export default function Home() {
     css?: string; 
     javascript?: string; 
     readme?: string; 
+    react?: string;
+    'react-components'?: string;
+    'react-setup'?: string;
+    'package.json'?: string;
     downloadUrl?: string 
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +30,12 @@ export default function Home() {
   const [selectedColors, setSelectedColors] = useState<Record<string, string>>({});
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isAIGenerated, setIsAIGenerated] = useState(false);
+  const [generatedFiles, setGeneratedFiles] = useState<Array<{
+    fileType: string;
+    fileName: string;
+    content: string;
+    progress: number;
+  }>>([]);
   const [excelData, setExcelData] = useState<ExcelData | null>(null);
   const [selectedDesignId, setSelectedDesignId] = useState<string | null>(null);
 
@@ -59,6 +70,27 @@ export default function Home() {
   const [isGeneratingDesigns, setIsGeneratingDesigns] = useState(false);
   const [designPrompt, setDesignPrompt] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Code generation options
+  const [codeGenerationOptions, setCodeGenerationOptions] = useState<CodeGenerationOptions>({
+    selectedFileTypes: ['html', 'css', 'javascript', 'readme'],
+    framework: 'html',
+    includeDependencies: true,
+    includeDocumentation: true,
+    includeDocker: false
+  });
+
+  // Reset code generation options to defaults
+  const resetCodeGenerationOptions = () => {
+    setCodeGenerationOptions({
+      selectedFileTypes: ['html', 'css', 'javascript', 'readme'],
+      framework: 'html',
+      includeDependencies: true,
+      includeDocumentation: true,
+      includeDocker: false
+    });
+  };
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -82,6 +114,13 @@ export default function Home() {
       const parseResult = await parseResponse.json();
 
       if (!parseResult.success) {
+        console.error('❌ [MAIN PAGE] Document parsing failed:', parseResult.error);
+        
+        // Check if it's an API key issue
+        if (parseResult.error?.includes('401') || parseResult.error?.includes('Unauthorized')) {
+          throw new Error('API authentication failed. Please check your API keys in .env.local file and restart the server.');
+        }
+        
         throw new Error(parseResult.error || 'Failed to parse document');
       }
 
@@ -145,6 +184,7 @@ export default function Home() {
       setError(error instanceof Error ? error.message : 'Failed to process file');
       setIsProcessing(false);
       setCurrentStep(1);
+      resetCodeGenerationOptions();
     }
   };
 
@@ -223,16 +263,8 @@ export default function Home() {
       designPrompt: designPrompt
     });
     
-    setTimeout(() => {
-      console.log('⏰ [MAIN PAGE] Timeout reached, calling handleGenerateCode...');
-      console.log('📊 [MAIN PAGE] Final check before code generation:', {
-        hasDataAnalysis: !!dataAnalysis,
-        hasSelectedColors: !!selectedColors,
-        hasSelectedDesign: !!selectedDesignId,
-        selectedColorsKeys: selectedColors ? Object.keys(selectedColors) : []
-      });
-      handleGenerateCode();
-    }, 2000); // Increased timeout to ensure state is updated
+    // Remove automatic code generation - let user configure options first
+    console.log('✅ [MAIN PAGE] Design selection completed, ready for user to configure code generation options');
   };
 
   const handleColorSelect = (colors: Record<string, string>) => {
@@ -320,7 +352,8 @@ export default function Home() {
             selectedColors,
             projectName: finalDataAnalysis?.projectName || 'Generated Project'
           },
-          framework: 'html'
+          framework: codeGenerationOptions.framework,
+          codeGenerationOptions: codeGenerationOptions
         }),
       });
 
@@ -348,6 +381,104 @@ export default function Home() {
       setError(error instanceof Error ? error.message : 'Failed to generate code');
     } finally {
       console.log('🏁 [MAIN PAGE] Code generation process completed');
+      setIsGeneratingCode(false);
+    }
+  };
+
+  const handleStepByStepGeneration = async () => {
+    console.log('🚀 [STEP-BY-STEP] Starting step-by-step code generation...');
+    console.log('📋 [STEP-BY-STEP] Framework:', codeGenerationOptions.framework);
+    console.log('📋 [STEP-BY-STEP] Selected file types:', codeGenerationOptions.selectedFileTypes);
+    
+    setIsGeneratingCode(true);
+    setError(null);
+    setGeneratedFiles([]);
+    setCurrentStep(6); // Move to download step to show progress
+    
+    try {
+      const response = await fetch('/api/generate-step-by-step', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          layoutData: {
+            dataAnalysis: dataAnalysis,
+            selectedColors,
+            projectName: dataAnalysis?.projectName || 'Generated Project'
+          },
+          framework: codeGenerationOptions.framework,
+          codeGenerationOptions: codeGenerationOptions
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to start step-by-step generation');
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body reader available');
+      }
+
+      const decoder = new TextDecoder();
+      const generatedFiles: Array<{
+        fileType: string;
+        fileName: string;
+        content: string;
+        progress: number;
+      }> = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'file') {
+                console.log(`✅ [STEP-BY-STEP] Generated ${data.fileType}:`, data.fileName);
+                const newFile = {
+                  fileType: data.fileType,
+                  fileName: data.fileName,
+                  content: data.content,
+                  progress: data.progress
+                };
+                generatedFiles.push(newFile);
+                setGeneratedFiles([...generatedFiles]);
+                
+                // Update generatedCode immediately with the new file
+                setGeneratedCode(prev => ({
+                  ...prev,
+                  [data.fileType]: data.content
+                }));
+              } else if (data.type === 'progress') {
+                console.log(`🔄 [STEP-BY-STEP] Progress: ${data.message} (${data.progress}%)`);
+                setCurrentStep(6); // Keep showing progress
+              } else if (data.type === 'complete') {
+                console.log('🎉 [STEP-BY-STEP] Generation completed!');
+                console.log('📊 [STEP-BY-STEP] Final generatedFiles:', generatedFiles);
+                console.log('📊 [STEP-BY-STEP] Final generatedCode keys:', Object.keys(generatedCode || {}));
+                setIsAIGenerated(true);
+              } else if (data.type === 'error') {
+                console.error(`❌ [STEP-BY-STEP] Error in ${data.fileType}:`, data.error);
+                setError(`Error generating ${data.fileType}: ${data.error}`);
+              }
+            } catch (parseError) {
+              console.warn('⚠️ [STEP-BY-STEP] Failed to parse SSE data:', parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ [STEP-BY-STEP] Error:', error);
+      setError(error instanceof Error ? error.message : 'Step-by-step generation failed');
+    } finally {
       setIsGeneratingCode(false);
     }
   };
@@ -619,56 +750,162 @@ export default function Home() {
           )}
 
           {currentStep === 5 && !error && !isGeneratingCode && (
-            <div className="text-center">
-              <div className="w-24 h-24 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900 dark:to-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Code className="w-12 h-12 text-purple-600 dark:text-purple-400" />
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <div className="w-24 h-24 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900 dark:to-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Code className="w-12 h-12 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+                  Ready to Generate Code
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-8">
+                  Configure your code generation options below and click the button to generate your complete web application
+                </p>
               </div>
-              <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                Ready to Generate Code
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-8">
-                Click the button below to generate your complete web application
-              </p>
               
-              {/* Manual Code Generation Button */}
-              <div className="space-y-4">
-                <button
-                  onClick={() => handleGenerateCode()}
+              {/* Current Selection Summary */}
+              <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl border border-blue-200 dark:border-blue-800 shadow-lg">
+                <h4 className="font-bold text-lg text-blue-900 dark:text-blue-100 mb-4 flex items-center">
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Current Selection
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">Design:</span>
+                      <span className="ml-2 text-blue-700 dark:text-blue-300">
+                        {designOptions.find(d => d.id === selectedDesignId)?.name || 'None selected'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">Framework:</span>
+                      <span className="ml-2 px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 rounded-md text-sm font-medium">
+                        {codeGenerationOptions.framework.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">Files to generate:</span>
+                      <span className="ml-2 px-2 py-1 bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200 rounded-md text-sm font-medium">
+                        {codeGenerationOptions.selectedFileTypes.length} file(s)
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-blue-800 dark:text-blue-200">Colors:</span>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {selectedColors && Object.keys(selectedColors).length > 0 ? (
+                          Object.entries(selectedColors).map(([key, value]) => (
+                            <div key={key} className="flex items-center space-x-1">
+                              <div 
+                                className="w-4 h-4 rounded-full border-2 border-white shadow-sm" 
+                                style={{ backgroundColor: value }}
+                                title={`${key}: ${value}`}
+                              ></div>
+                              <span className="text-xs text-blue-700 dark:text-blue-300">{key}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-blue-700 dark:text-blue-300 text-sm">None selected</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Code Generation Options */}
+              <div className="mb-8 p-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg">
+                <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center">
+                  <Settings className="w-6 h-6 mr-3 text-purple-600 dark:text-purple-400" />
+                  Code Generation Options
+                </h4>
+                <CodeGenerationSelector
+                  key={codeGenerationOptions.framework}
+                  options={codeGenerationOptions}
+                  onOptionsChange={setCodeGenerationOptions}
                   disabled={isGeneratingCode}
-                  className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] disabled:transform-none"
+                />
+              </div>
+              
+              {/* Generate Code Button */}
+              <div className="text-center space-y-6">
+                <button
+                  onClick={() => {
+                    if (codeGenerationOptions.framework === 'react') {
+                      handleStepByStepGeneration();
+                    } else {
+                      handleGenerateCode();
+                    }
+                  }}
+                  disabled={isGeneratingCode || codeGenerationOptions.selectedFileTypes.length === 0}
+                  className="inline-flex items-center px-12 py-5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-200 shadow-xl hover:shadow-2xl transform hover:scale-[1.02] disabled:transform-none text-lg font-semibold"
                 >
                   {isGeneratingCode ? (
                     <>
                       <RefreshCw className="w-6 h-6 mr-3 animate-spin" />
-                      <span>Generating Code...</span>
+                      <span>
+                        {codeGenerationOptions.framework === 'react' ? 'Generating React Components...' : 'Generating Code...'}
+                      </span>
                     </>
                   ) : (
                     <>
                       <Code className="w-6 h-6 mr-3" />
-                      <span>Generate Code Now</span>
+                      <span>
+                        {codeGenerationOptions.framework === 'react' ? 'Generate React App' : 'Generate Code Now'}
+                      </span>
                     </>
                   )}
                 </button>
                 
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  <p>Selected Design: {designOptions.find(d => d.id === selectedDesignId)?.name || 'None'}</p>
-                  <p>Colors: {selectedColors ? Object.keys(selectedColors).join(', ') : 'None'}</p>
+                {codeGenerationOptions.selectedFileTypes.length === 0 && (
+                  <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <p className="text-orange-600 dark:text-orange-400 font-medium flex items-center justify-center">
+                      <span className="text-xl mr-2">⚠️</span>
+                      Please select at least one file type to generate
+                    </p>
+                  </div>
+                )}
+                
+                <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                  <p>Ready to create your <strong>{codeGenerationOptions.framework.toUpperCase()}</strong> application</p>
+                  <p>Generating <strong>{codeGenerationOptions.selectedFileTypes.length}</strong> file(s) with your selected design and colors</p>
                 </div>
               </div>
             </div>
           )}
 
           {currentStep === 5 && !error && isGeneratingCode && (
-            <div className="text-center">
-              <div className="w-24 h-24 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900 dark:to-blue-900 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                <Code className="w-12 h-12 text-purple-600 dark:text-purple-400 animate-bounce" />
+            <div className="max-w-2xl mx-auto text-center">
+              <div className="w-32 h-32 bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900 dark:to-blue-900 rounded-full flex items-center justify-center mx-auto mb-8 animate-pulse shadow-2xl">
+                <Code className="w-16 h-16 text-purple-600 dark:text-purple-400 animate-bounce" />
               </div>
-              <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                Generating HTML, CSS & JavaScript...
+              <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
+                Generating {codeGenerationOptions.framework.toUpperCase()} Application...
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-8">
-                AI is creating a complete web application that runs in any browser
+              <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
+                AI is creating your complete web application with {codeGenerationOptions.selectedFileTypes.length} file(s)
               </p>
+              
+              {/* Progress Steps */}
+              <div className="space-y-4 mb-8">
+                <div className="flex items-center justify-center space-x-3 text-sm">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-700 dark:text-gray-300">Analyzing requirements...</span>
+                </div>
+                <div className="flex items-center justify-center space-x-3 text-sm">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-700 dark:text-gray-300">Generating {codeGenerationOptions.selectedFileTypes.includes('html') ? 'HTML' : 'code'} structure...</span>
+                </div>
+                <div className="flex items-center justify-center space-x-3 text-sm">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-700 dark:text-gray-300">Creating {codeGenerationOptions.selectedFileTypes.includes('css') ? 'CSS' : 'styling'}...</span>
+                </div>
+                <div className="flex items-center justify-center space-x-3 text-sm">
+                  <div className="w-3 h-3 bg-purple-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-700 dark:text-gray-300">Building {codeGenerationOptions.selectedFileTypes.includes('javascript') ? 'JavaScript' : 'functionality'}...</span>
+                </div>
+              </div>
               
               {/* Progress Bar */}
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-6 max-w-md mx-auto">
@@ -676,24 +913,7 @@ export default function Home() {
               </div>
               
               {/* Loading Steps */}
-              <div className="space-y-3 max-w-md mx-auto">
-                <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span>Analyzing requirements...</span>
-                </div>
-                <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span>Generating HTML structure...</span>
-                </div>
-                <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span>Creating CSS styles...</span>
-                </div>
-                <div className="flex items-center space-x-3 text-sm text-gray-600 dark:text-gray-300">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                  <span>Building JavaScript functionality...</span>
-                </div>
-              </div>
+             
             </div>
           )}
 
@@ -741,7 +961,10 @@ export default function Home() {
                 
                 <div>
                   <button
-                    onClick={() => setCurrentStep(1)}
+                    onClick={() => {
+                      setCurrentStep(1);
+                      resetCodeGenerationOptions();
+                    }}
                     className="inline-flex items-center px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
                   >
                     Start Over
@@ -751,27 +974,101 @@ export default function Home() {
             </div>
           )}
 
-          {currentStep === 6 && generatedCode && (
+          {currentStep === 6 && (
             <div className="text-center">
-              <div className="w-24 h-24 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Download className="w-12 h-12 text-green-600 dark:text-green-400" />
-              </div>
-              <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
-                Your Application is Ready!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 mb-8">
-                Download your complete web application with HTML, CSS, and JavaScript files.
-              </p>
+              {isGeneratingCode ? (
+                // Step-by-step generation progress
+                <div className="space-y-6">
+                  <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <RefreshCw className="w-12 h-12 text-blue-600 dark:text-blue-400 animate-spin" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+                    Generating {codeGenerationOptions.framework === 'react' ? 'React Components' : 'Code'}...
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-8">
+                    Creating your application files step by step
+                  </p>
+                  
+                  {/* Progress Bar */}
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-6">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500"
+                      style={{ 
+                        width: `${generatedFiles.length > 0 ? (generatedFiles.length / codeGenerationOptions.selectedFileTypes.length) * 100 : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                  
+                  {/* Generated Files List */}
+                  {generatedFiles.length > 0 && (
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left">
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-3">Generated Files</h4>
+                      <div className="space-y-2">
+                        {generatedFiles.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border">
+                            <div className="flex items-center">
+                              <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {file.fileName}
+                              </span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
+                                ({file.fileType})
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {Math.round((file.content.length / 1000) * 10) / 10}KB
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Remaining Files */}
+                  {generatedFiles.length < codeGenerationOptions.selectedFileTypes.length && (
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Generating {codeGenerationOptions.selectedFileTypes[generatedFiles.length]}...
+                    </div>
+                  )}
+                </div>
+              ) : generatedCode ? (
+                // Download section
+                <div>
+                  <div className="w-24 h-24 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Download className="w-12 h-12 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+                    Your {codeGenerationOptions.framework === 'react' ? 'React' : 'Web'} Application is Ready!
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-8">
+                    {codeGenerationOptions.framework === 'react' 
+                      ? 'Download your complete React application with components, setup guide, and all necessary files.'
+                      : 'Download your complete web application with HTML, CSS, and JavaScript files.'
+                    }
+                  </p>
               
               <div className="space-y-6">
                 {/* File Structure Display */}
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                   <h4 className="font-medium text-gray-900 dark:text-white mb-3">Generated Files</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    {generatedCode.html && <div className="flex items-center text-green-600 dark:text-green-400">✅ index.html</div>}
-                    {generatedCode.css && <div className="flex items-center text-green-600 dark:text-green-400">✅ styles.css</div>}
-                    {generatedCode.javascript && <div className="flex items-center text-green-600 dark:text-green-400">✅ script.js</div>}
-                    {generatedCode.readme && <div className="flex items-center text-green-600 dark:text-green-400">✅ README.txt</div>}
+                    {codeGenerationOptions.framework === 'react' ? (
+                      <>
+                        {(generatedCode?.['react-components'] || generatedCode?.react) && <div className="flex items-center text-green-600 dark:text-green-400">✅ React Components</div>}
+                        {(generatedCode?.['react-setup'] || generatedCode?.readme) && <div className="flex items-center text-green-600 dark:text-green-400">✅ Setup Guide</div>}
+                        {generatedCode?.html && <div className="flex items-center text-green-600 dark:text-green-400">✅ index.html</div>}
+                        {generatedCode?.css && <div className="flex items-center text-green-600 dark:text-green-400">✅ styles.css</div>}
+                        {generatedCode?.javascript && <div className="flex items-center text-green-600 dark:text-green-400">✅ script.js</div>}
+                        {generatedCode?.['package.json'] && <div className="flex items-center text-green-600 dark:text-green-400">✅ package.json</div>}
+                      </>
+                    ) : (
+                      <>
+                        {generatedCode?.html && <div className="flex items-center text-green-600 dark:text-green-400">✅ index.html</div>}
+                        {generatedCode?.css && <div className="flex items-center text-green-600 dark:text-green-400">✅ styles.css</div>}
+                        {generatedCode?.javascript && <div className="flex items-center text-green-600 dark:text-green-400">✅ script.js</div>}
+                        {generatedCode?.readme && <div className="flex items-center text-green-600 dark:text-green-400">✅ README.txt</div>}
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -799,12 +1096,18 @@ export default function Home() {
                     onClick={async () => {
                       try {
                         console.log('📥 [MAIN PAGE] Starting download...');
+                        console.log('📊 [MAIN PAGE] GeneratedCode object:', generatedCode);
                         console.log('📊 [MAIN PAGE] Data being sent:', {
-                          hasHtml: !!generatedCode.html,
-                          hasCss: !!generatedCode.css,
-                          hasJavascript: !!generatedCode.javascript,
-                          hasReadme: !!generatedCode.readme,
-                          dataKeys: Object.keys(generatedCode)
+                          hasHtml: !!generatedCode?.html,
+                          hasCss: !!generatedCode?.css,
+                          hasJavascript: !!generatedCode?.javascript,
+                          hasReadme: !!generatedCode?.readme,
+                          hasReact: !!generatedCode?.react,
+                          hasReactComponents: !!generatedCode?.['react-components'],
+                          hasReactSetup: !!generatedCode?.['react-setup'],
+                          hasPackageJson: !!generatedCode?.['package.json'],
+                          dataKeys: Object.keys(generatedCode || {}),
+                          generatedFilesCount: generatedFiles.length
                         });
                         
                         const response = await fetch('/api/export/code/download', {
@@ -812,7 +1115,10 @@ export default function Home() {
                           headers: {
                             'Content-Type': 'application/json',
                           },
-                          body: JSON.stringify({ data: generatedCode }),
+                          body: JSON.stringify({ 
+                            data: generatedCode,
+                            codeGenerationOptions: codeGenerationOptions
+                          }),
                         });
                         
                         console.log('📡 [MAIN PAGE] Response status:', response.status);
@@ -830,7 +1136,7 @@ export default function Home() {
                         const url = window.URL.createObjectURL(blob);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = `laygen-app-${Date.now()}.zip`;
+                        link.download = `laygen-${codeGenerationOptions.framework === 'react' ? 'react' : 'web'}-app-${Date.now()}.zip`;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
@@ -845,7 +1151,7 @@ export default function Home() {
                     className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                   >
                     <Download className="w-5 h-5 mr-2" />
-                    Download Application
+                    {codeGenerationOptions.framework === 'react' ? 'Download React App' : 'Download Application'}
                   </button>
                   
                   {!isAIGenerated && (
@@ -865,7 +1171,10 @@ export default function Home() {
                 
                 
                 <div className="text-sm text-gray-500 dark:text-gray-400 text-center">
-                  Complete web application with HTML, CSS, JavaScript, and documentation
+                  {codeGenerationOptions.framework === 'react' 
+                    ? 'Complete React application with components, setup guide, and all necessary files'
+                    : 'Complete web application with HTML, CSS, JavaScript, and documentation'
+                  }
                 </div>
               </div>
 
@@ -873,46 +1182,112 @@ export default function Home() {
               <div className="mt-8 bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
                 <h4 className="font-medium text-gray-900 dark:text-white mb-4">Code Preview</h4>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* HTML Preview */}
-                  {generatedCode.html && (
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">index.html</h5>
-                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
-                        <pre className="whitespace-pre-wrap">{generatedCode.html.substring(0, 1000)}{generatedCode.html.length > 1000 && '...'}</pre>
-                    </div>
-                    </div>
-                  )}
+                  {codeGenerationOptions.framework === 'react' ? (
+                    <>
+                      {/* React Components Preview */}
+                      {(generatedCode?.['react-components'] || generatedCode?.react) && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">React Components</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{(generatedCode?.['react-components'] || generatedCode?.react || '').substring(0, 1000)}{(generatedCode?.['react-components'] || generatedCode?.react || '').length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
 
-                  {/* CSS Preview */}
-                  {generatedCode.css && (
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">styles.css</h5>
-                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
-                        <pre className="whitespace-pre-wrap">{generatedCode.css.substring(0, 1000)}{generatedCode.css.length > 1000 && '...'}</pre>
-                  </div>
+                      {/* React Setup Preview */}
+                      {(generatedCode?.['react-setup'] || generatedCode?.readme) && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Setup Guide</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{(generatedCode?.['react-setup'] || generatedCode?.readme || '').substring(0, 1000)}{(generatedCode?.['react-setup'] || generatedCode?.readme || '').length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* HTML Preview */}
+                      {generatedCode?.html && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">index.html</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.html.substring(0, 1000)}{generatedCode.html.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CSS Preview */}
+                      {generatedCode?.css && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">styles.css</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.css.substring(0, 1000)}{generatedCode.css.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* JavaScript Preview */}
+                      {generatedCode?.javascript && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">script.js</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.javascript.substring(0, 1000)}{generatedCode.javascript.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Package.json Preview */}
+                      {generatedCode?.['package.json'] && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">package.json</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode['package.json'].substring(0, 1000)}{generatedCode['package.json'].length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* HTML Preview */}
+                      {generatedCode?.html && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">index.html</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.html.substring(0, 1000)}{generatedCode.html.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CSS Preview */}
+                      {generatedCode?.css && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">styles.css</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.css.substring(0, 1000)}{generatedCode.css.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* JavaScript Preview */}
+                      {generatedCode?.javascript && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">script.js</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.javascript.substring(0, 1000)}{generatedCode.javascript.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* README Preview */}
+                      {generatedCode?.readme && (
+                        <div>
+                          <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">README.txt</h5>
+                          <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
+                            <pre className="whitespace-pre-wrap">{generatedCode.readme.substring(0, 1000)}{generatedCode.readme.length > 1000 && '...'}</pre>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-                  )}
-
-                  {/* JavaScript Preview */}
-                  {generatedCode.javascript && (
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">script.js</h5>
-                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
-                        <pre className="whitespace-pre-wrap">{generatedCode.javascript.substring(0, 1000)}{generatedCode.javascript.length > 1000 && '...'}</pre>
-                </div>
-                    </div>
-                  )}
-
-                  {/* README Preview */}
-                  {generatedCode.readme && (
-                    <div>
-                      <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">README.txt</h5>
-                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto max-h-64">
-                        <pre className="whitespace-pre-wrap">{generatedCode.readme.substring(0, 1000)}{generatedCode.readme.length > 1000 && '...'}</pre>
-              </div>
-            </div>
-          )}
-        </div>
 
                 {/* Live Preview Button */}
                 <div className="mt-4 text-center">
@@ -952,6 +1327,20 @@ export default function Home() {
                   </button>
             </div>
           </div>
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Code className="w-12 h-12 text-gray-400" />
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+                    Ready to Generate
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-8">
+                    Click the button above to start generating your application
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

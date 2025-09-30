@@ -271,6 +271,39 @@ export interface ExcelData {
   rawData: unknown[][];
 }
 
+// Code generation types
+export type CodeFileType = 
+  | 'html'
+  | 'css' 
+  | 'javascript'
+  | 'react'
+  | 'react-components'
+  | 'react-setup'
+  | 'vue'
+  | 'svelte'
+  | 'typescript'
+  | 'readme'
+  | 'package.json'
+  | 'gitignore'
+  | 'dockerfile'
+  | 'docker-compose';
+
+export interface CodeGenerationOptions {
+  selectedFileTypes: CodeFileType[];
+  framework: 'html' | 'react' | 'vue' | 'svelte' | 'nextjs';
+  includeDependencies: boolean;
+  includeDocumentation: boolean;
+  includeDocker: boolean;
+}
+
+export interface CodeFile {
+  type: CodeFileType;
+  name: string;
+  content: string;
+  path: string;
+  description: string;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   success: boolean;

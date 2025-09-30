@@ -9,6 +9,11 @@ interface CodeData {
   css?: string;
   javascript?: string;
   readme?: string;
+  react?: string;
+  vue?: string;
+  svelte?: string;
+  typescript?: string;
+  reactIndex?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -114,12 +119,14 @@ export async function POST(request: NextRequest) {
   
   try {
     console.log('📥 [CODE API] Extracting request data...');
-    const { layoutData, framework = 'html' } = await request.json();
+    const { layoutData, framework = 'html', codeGenerationOptions } = await request.json();
     
     console.log('📋 [CODE API] Request data:', {
       hasLayoutData: !!layoutData,
       framework: framework,
-      layoutDataKeys: layoutData ? Object.keys(layoutData) : []
+      layoutDataKeys: layoutData ? Object.keys(layoutData) : [],
+      hasCodeGenerationOptions: !!codeGenerationOptions,
+      selectedFileTypes: codeGenerationOptions?.selectedFileTypes || []
     });
     
     if (!layoutData) {
@@ -155,7 +162,13 @@ export async function POST(request: NextRequest) {
       colors: layoutData.selectedColors ? Object.keys(layoutData.selectedColors) : []
     });
     
-    const result = await aiService.generateCode(layoutData, framework);
+    // Add code generation options to layout data for AI service
+    const enhancedLayoutData = {
+      ...layoutData,
+      codeGenerationOptions: codeGenerationOptions
+    };
+    
+    const result = await aiService.generateCode(enhancedLayoutData, framework);
 
     if (!result.success) {
       console.log('❌ [CODE API] AI code generation failed:', result.error);
@@ -180,12 +193,70 @@ export async function POST(request: NextRequest) {
     }
     
     // Extract the simplified code data
-    const codeData = result.layoutData as CodeData;
+    const fullCodeData = result.layoutData as CodeData;
     console.log('📁 [CODE API] Generated code structure:', {
+      hasHtml: !!fullCodeData.html,
+      hasCss: !!fullCodeData.css,
+      hasJavascript: !!fullCodeData.javascript,
+      hasReadme: !!fullCodeData.readme
+    });
+
+    // Filter code data based on selected file types
+    const selectedFileTypes = codeGenerationOptions?.selectedFileTypes || ['html', 'css', 'javascript', 'readme'];
+    const codeData: CodeData = {};
+    
+    console.log('🔍 [CODE API] Filtering code based on selected file types:', selectedFileTypes);
+    
+    if (selectedFileTypes.includes('html') && fullCodeData.html) {
+      codeData.html = fullCodeData.html;
+      console.log('✅ [CODE API] Included HTML');
+    }
+    
+    if (selectedFileTypes.includes('css') && fullCodeData.css) {
+      codeData.css = fullCodeData.css;
+      console.log('✅ [CODE API] Included CSS');
+    }
+    
+    if (selectedFileTypes.includes('javascript') && fullCodeData.javascript) {
+      codeData.javascript = fullCodeData.javascript;
+      console.log('✅ [CODE API] Included JavaScript');
+    }
+    
+    if (selectedFileTypes.includes('readme') && fullCodeData.readme) {
+      codeData.readme = fullCodeData.readme;
+      console.log('✅ [CODE API] Included README');
+    }
+    
+    // Add framework-specific files if selected
+    if (selectedFileTypes.includes('react') && fullCodeData.react) {
+      codeData.react = fullCodeData.react;
+      console.log('✅ [CODE API] Included React');
+    }
+    
+    if (selectedFileTypes.includes('vue') && fullCodeData.vue) {
+      codeData.vue = fullCodeData.vue;
+      console.log('✅ [CODE API] Included Vue');
+    }
+    
+    if (selectedFileTypes.includes('svelte') && fullCodeData.svelte) {
+      codeData.svelte = fullCodeData.svelte;
+      console.log('✅ [CODE API] Included Svelte');
+    }
+    
+    if (selectedFileTypes.includes('typescript') && fullCodeData.typescript) {
+      codeData.typescript = fullCodeData.typescript;
+      console.log('✅ [CODE API] Included TypeScript');
+    }
+    
+    console.log('📊 [CODE API] Filtered code data:', {
       hasHtml: !!codeData.html,
       hasCss: !!codeData.css,
       hasJavascript: !!codeData.javascript,
-      hasReadme: !!codeData.readme
+      hasReadme: !!codeData.readme,
+      hasReact: !!codeData.react,
+      hasVue: !!codeData.vue,
+      hasSvelte: !!codeData.svelte,
+      hasTypeScript: !!codeData.typescript
     });
 
     // Validate generated code

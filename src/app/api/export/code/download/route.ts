@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import JSZip from 'jszip';
+import { CodeFileType } from '@/types';
 
 // Helper function to create a basic HTML template
 function createBasicHTMLTemplate(content: string = ''): string {
@@ -91,6 +92,80 @@ function validateAndFixHTML(htmlContent: string): string {
   return fixedHTML;
 }
 
+// Helper function to parse React components from a single content string
+function parseReactComponents(componentsContent: string): Record<string, string> {
+  const componentFiles: Record<string, string> = {};
+  
+  try {
+    // Try to split by common component patterns
+    const componentPatterns = [
+      // Pattern 1: Components separated by "// Component:" or "// Component Name:"
+      /\/\/\s*Component:\s*([^\n]+)\n([\s\S]*?)(?=\/\/\s*Component:|$)/g,
+      // Pattern 2: Components separated by "export const" or "export function"
+      /export\s+(const|function)\s+([A-Z][a-zA-Z0-9]*)/g,
+      // Pattern 3: Components separated by "const ComponentName ="
+      /const\s+([A-Z][a-zA-Z0-9]*)\s*=/g
+    ];
+    
+    for (const pattern of componentPatterns) {
+      const matches = [...componentsContent.matchAll(pattern)];
+      if (matches.length > 1) {
+        // Found multiple components, try to extract them
+        for (let i = 0; i < matches.length; i++) {
+          const match = matches[i];
+          const componentName = match[1] || match[2] || `Component${i + 1}`;
+          const startIndex = match.index || 0;
+          const endIndex = i < matches.length - 1 ? (matches[i + 1].index || componentsContent.length) : componentsContent.length;
+          
+          const componentContent = componentsContent.slice(startIndex, endIndex).trim();
+          if (componentContent.length > 50) { // Only include substantial components
+            const fileName = `${componentName}.jsx`;
+            componentFiles[fileName] = componentContent;
+          }
+        }
+        break; // Found components with this pattern, stop trying others
+      }
+    }
+    
+    // If no components were found with patterns, try to split by file markers
+    if (Object.keys(componentFiles).length === 0) {
+      const fileMarkers = [
+        '// File:',
+        '// Component:',
+        '// =====',
+        '---',
+        '```'
+      ];
+      
+      for (const marker of fileMarkers) {
+        const parts = componentsContent.split(marker);
+        if (parts.length > 1) {
+          for (let i = 1; i < parts.length; i++) {
+            const part = parts[i].trim();
+            if (part.length > 50) {
+              const fileName = `Component${i}.jsx`;
+              componentFiles[fileName] = part;
+            }
+          }
+          break;
+        }
+      }
+    }
+    
+    // If still no components found, create a single file
+    if (Object.keys(componentFiles).length === 0) {
+      componentFiles['Components.jsx'] = componentsContent;
+    }
+    
+    console.log(`📦 [COMPONENT PARSER] Extracted ${Object.keys(componentFiles).length} components`);
+    return componentFiles;
+    
+  } catch (error) {
+    console.warn('⚠️ [COMPONENT PARSER] Failed to parse components, creating single file:', error);
+    return { 'Components.jsx': componentsContent };
+  }
+}
+
 // Create proper ZIP file using JSZip
 async function createZipFile(files: { [key: string]: string }): Promise<Buffer> {
   const zip = new JSZip();
@@ -113,11 +188,20 @@ export async function POST(request: NextRequest) {
     console.log('🔍 [DOWNLOAD API] Extracting code data from request body...');
     const body = await request.json();
     const codeData = body.data;
+    const codeGenerationOptions = body.codeGenerationOptions || {
+      selectedFileTypes: ['html', 'css', 'javascript', 'readme'],
+      framework: 'html',
+      includeDependencies: true,
+      includeDocumentation: true,
+      includeDocker: false
+    };
     
     if (!codeData) {
       console.log('❌ [DOWNLOAD API] No data provided in request body');
       return NextResponse.json({ error: 'No data provided' }, { status: 400 });
     }
+
+    console.log('📋 [DOWNLOAD API] Code generation options:', codeGenerationOptions);
 
     console.log('📋 [DOWNLOAD API] Code data received successfully');
     console.log('📊 [DOWNLOAD API] Available code sections:', Object.keys(codeData));
@@ -126,30 +210,45 @@ export async function POST(request: NextRequest) {
       hasCss: !!codeData.css,
       hasJavascript: !!codeData.javascript,
       hasReadme: !!codeData.readme,
+      hasReact: !!codeData.react,
+      hasReactComponents: !!codeData['react-components'],
+      hasReactSetup: !!codeData['react-setup'],
+      hasPackageJson: !!codeData['package.json'],
       htmlLength: codeData.html?.length || 0,
       cssLength: codeData.css?.length || 0,
       jsLength: codeData.javascript?.length || 0,
-      readmeLength: codeData.readme?.length || 0
+      readmeLength: codeData.readme?.length || 0,
+      reactLength: codeData.react?.length || 0,
+      reactComponentsLength: codeData['react-components']?.length || 0,
+      reactSetupLength: codeData['react-setup']?.length || 0,
+      packageJsonLength: codeData['package.json']?.length || 0
     });
     
-    // Create files for the ZIP
+    // Create files for the ZIP based on selected file types
     console.log('📁 [DOWNLOAD API] Creating file structure for ZIP...');
+    console.log('📋 [DOWNLOAD API] Selected file types:', codeGenerationOptions.selectedFileTypes);
     const files: { [key: string]: string } = {};
     
+    // Helper function to check if a file type should be included
+    const shouldIncludeFile = (fileType: string) => {
+      return codeGenerationOptions.selectedFileTypes.includes(fileType as CodeFileType);
+    };
+    
     // Add HTML file with proper validation and formatting
-    if (codeData.html) {
+    if (shouldIncludeFile('html') && codeData.html) {
       const htmlContent = validateAndFixHTML(codeData.html);
       files['index.html'] = htmlContent;
       console.log('✅ [DOWNLOAD API] Added index.html with proper structure');
     }
     
     // Add CSS file with fallback
-    if (codeData.css) {
-      files['styles.css'] = codeData.css;
-      console.log('✅ [DOWNLOAD API] Added styles.css');
-    } else {
-      // Add basic CSS fallback
-      files['styles.css'] = `/* Basic CSS Reset and Styles */
+    if (shouldIncludeFile('css')) {
+      if (codeData.css) {
+        files['styles.css'] = codeData.css;
+        console.log('✅ [DOWNLOAD API] Added styles.css');
+      } else {
+        // Add basic CSS fallback
+        files['styles.css'] = `/* Basic CSS Reset and Styles */
 * {
   margin: 0;
   padding: 0;
@@ -189,16 +288,18 @@ p {
     margin: 0;
   }
 }`;
-      console.log('✅ [DOWNLOAD API] Added fallback styles.css');
+        console.log('✅ [DOWNLOAD API] Added fallback styles.css');
+      }
     }
     
     // Add JavaScript file with fallback
-    if (codeData.javascript) {
-      files['script.js'] = codeData.javascript;
-      console.log('✅ [DOWNLOAD API] Added script.js');
-    } else {
-      // Add basic JavaScript fallback
-      files['script.js'] = `// Basic JavaScript functionality
+    if (shouldIncludeFile('javascript')) {
+      if (codeData.javascript) {
+        files['script.js'] = codeData.javascript;
+        console.log('✅ [DOWNLOAD API] Added script.js');
+      } else {
+        // Add basic JavaScript fallback
+        files['script.js'] = `// Basic JavaScript functionality
 console.log('Generated app loaded successfully!');
 
 // Add some basic interactivity
@@ -224,29 +325,200 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });`;
-      console.log('✅ [DOWNLOAD API] Added fallback script.js');
+        console.log('✅ [DOWNLOAD API] Added fallback script.js');
+      }
+    }
+    
+    // Add TypeScript file if selected
+    if (shouldIncludeFile('typescript') && codeData.typescript) {
+      files['script.ts'] = codeData.typescript;
+      console.log('✅ [DOWNLOAD API] Added script.ts');
+    }
+    
+    // Add React files if selected
+    if (shouldIncludeFile('react')) {
+      if (codeData.react) {
+        files['App.jsx'] = codeData.react;
+        console.log('✅ [DOWNLOAD API] Added App.jsx');
+      }
+      if (codeData.reactIndex) {
+        files['index.js'] = codeData.reactIndex;
+        console.log('✅ [DOWNLOAD API] Added index.js');
+      }
+    }
+    
+    // Add React components if they exist (regardless of selection)
+    if (codeData['react-components'] || codeData.react) {
+      // Parse the react-components content to create multiple component files
+      const componentsContent = codeData['react-components'] || codeData.react;
+      try {
+        // Try to extract individual components from the content
+        const componentFiles = parseReactComponents(componentsContent as string);
+        Object.entries(componentFiles).forEach(([filename, content]) => {
+          files[`src/components/${filename}`] = content as string;
+          console.log(`✅ [DOWNLOAD API] Added React component: ${filename}`);
+        });
+      } catch {
+        // If parsing fails, create a single components file
+        files['src/components/Components.jsx'] = componentsContent as string;
+        console.log('✅ [DOWNLOAD API] Added Components.jsx (single file)');
+      }
+    }
+    
+    // Add React setup guide if it exists (regardless of selection)
+    if (codeData['react-setup'] || codeData.readme) {
+      files['SETUP.md'] = codeData['react-setup'] || codeData.readme;
+      console.log('✅ [DOWNLOAD API] Added SETUP.md');
+    }
+    
+    // Add HTML, CSS, JS files for React if they exist (regardless of selection)
+    if (codeData.html) {
+      const htmlContent = validateAndFixHTML(codeData.html);
+      files['index.html'] = htmlContent;
+      console.log('✅ [DOWNLOAD API] Added index.html for React project');
+    }
+    
+    if (codeData.css) {
+      files['styles.css'] = codeData.css;
+      console.log('✅ [DOWNLOAD API] Added styles.css for React project');
+    }
+    
+    if (codeData.javascript) {
+      files['script.js'] = codeData.javascript;
+      console.log('✅ [DOWNLOAD API] Added script.js for React project');
+    }
+    
+    if (codeData['package.json']) {
+      files['package.json'] = codeData['package.json'];
+      console.log('✅ [DOWNLOAD API] Added package.json for React project');
+    }
+    
+    // Add Vue files if selected
+    if (shouldIncludeFile('vue')) {
+      if (codeData.vue) {
+        files['App.vue'] = codeData.vue;
+        console.log('✅ [DOWNLOAD API] Added App.vue');
+      }
+    }
+    
+    // Add Svelte files if selected
+    if (shouldIncludeFile('svelte')) {
+      if (codeData.svelte) {
+        files['App.svelte'] = codeData.svelte;
+        console.log('✅ [DOWNLOAD API] Added App.svelte');
+      }
     }
     
     // Add README file
-    if (codeData.readme) {
-      files['README.txt'] = codeData.readme;
-      console.log('✅ [DOWNLOAD API] Added README.txt');
+    if (shouldIncludeFile('readme') && codeData.readme) {
+      files['README.md'] = codeData.readme;
+      console.log('✅ [DOWNLOAD API] Added README.md');
     }
     
-    // Only add package.json if we don't have a custom README
-    if (!codeData.readme) {
-      files['package.json'] = JSON.stringify({
+    // Add package.json if selected and includeDependencies is true
+    if (shouldIncludeFile('package.json') && codeGenerationOptions.includeDependencies) {
+      const packageJson = {
         name: 'generated-app',
         version: '1.0.0',
         description: 'Generated web application',
         main: 'index.html',
         scripts: {
-          start: 'python -m http.server 8000',
-          serve: 'npx serve .'
+          start: codeGenerationOptions.framework === 'html' ? 'python -m http.server 8000' : 'npm run dev',
+          serve: 'npx serve .',
+          dev: codeGenerationOptions.framework === 'react' ? 'vite' : 'npm start'
         },
-        dependencies: {}
-      }, null, 2);
+        dependencies: codeGenerationOptions.framework === 'react' ? {
+          'react': '^18.0.0',
+          'react-dom': '^18.0.0',
+          'tailwindcss': '^3.3.0',
+          'bootstrap': '^5.3.0'
+        } : codeGenerationOptions.framework === 'vue' ? {
+          'vue': '^3.0.0',
+          'tailwindcss': '^3.3.0',
+          'bootstrap': '^5.3.0'
+        } : codeGenerationOptions.framework === 'svelte' ? {
+          'svelte': '^4.0.0',
+          'tailwindcss': '^3.3.0',
+          'bootstrap': '^5.3.0'
+        } : {
+          'tailwindcss': '^3.3.0',
+          'bootstrap': '^5.3.0'
+        },
+        devDependencies: {
+          'autoprefixer': '^10.4.0',
+          'postcss': '^8.4.0'
+        }
+      };
+      
+      files['package.json'] = JSON.stringify(packageJson, null, 2);
       console.log('✅ [DOWNLOAD API] Added package.json');
+    }
+    
+    // Add .gitignore if selected
+    if (shouldIncludeFile('gitignore')) {
+      files['.gitignore'] = `# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Production builds
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log`;
+      console.log('✅ [DOWNLOAD API] Added .gitignore');
+    }
+    
+    // Add Docker files if selected
+    if (shouldIncludeFile('dockerfile') && codeGenerationOptions.includeDocker) {
+      files['Dockerfile'] = `FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "start"]`;
+      console.log('✅ [DOWNLOAD API] Added Dockerfile');
+    }
+    
+    if (shouldIncludeFile('docker-compose') && codeGenerationOptions.includeDocker) {
+      files['docker-compose.yml'] = `version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - .:/app
+      - /app/node_modules`;
+      console.log('✅ [DOWNLOAD API] Added docker-compose.yml');
     }
     
     console.log('📦 [DOWNLOAD API] Creating ZIP file...');
